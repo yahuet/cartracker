@@ -2,6 +2,10 @@
 
 Analyse vidéo pour compter les véhicules passant sur une rue, en utilisant **YOLOv8** (détection + tracking) et **OpenCV** (gestion vidéo).
 
+**Deux modes disponibles :**
+- 🖥️ **Mode GUI** (recommandé) — Interface graphique moderne avec calibration visuelle
+- ⌨️ **Mode CLI** — Script en ligne de commande
+
 ---
 
 ## 📦 Installation
@@ -20,45 +24,44 @@ pip install -r requirements.txt
 
 ---
 
-## 🎯 Configuration de la ligne de comptage
+## 🖥️ Mode GUI (recommandé)
 
-### Étape 1 : Trouver les coordonnées
+```bash
+python gui.py
+```
 
-1. Place ta vidéo (`video.mp4`) dans le dossier du projet.
-2. Lance l'outil de calibration :
+### Utilisation :
+1. **Parcourir** — Sélectionne ta vidéo via le bouton
+2. **Calibrer** — Clique sur 2 points de l'image pour placer la ligne de comptage
+3. **Ajuster** — Modifie le seuil de confiance et les types de véhicules
+4. **Démarrer** — Lance l'analyse avec le bouton vert
+5. **Résultats** — Les stats s'affichent en direct, le CSV est généré automatiquement
+
+---
+
+## ⌨️ Mode CLI
+
+### Étape 1 : Trouver les coordonnées de la ligne
 
 ```bash
 python trouver_coordonnees.py
 ```
 
-3. **Clique sur l'image** aux points où tu veux placer ta ligne :
-   - Un clic sur le **bord gauche** de la route → note le `x` = `LIGNE_X1`
-   - Un clic sur le **bord droit** de la route → note le `x` = `LIGNE_X2`
-   - Le `y` de ces clics = `LIGNE_Y` (la hauteur de la ligne)
-
-4. Appuie sur `q` pour quitter.
-
-### Étape 2 : Modifier main.py
-
-Ouvre `main.py` et modifie ces 3 variables :
+Clique sur l'image pour obtenir les coordonnées, puis modifie `main.py` :
 
 ```python
-LIGNE_Y  = 400    # ← Remplace par ton y
-LIGNE_X1 = 100    # ← Remplace par ton x gauche
-LIGNE_X2 = 1180   # ← Remplace par ton x droit
+LIGNE_Y  = 400    # ← Ton y
+LIGNE_X1 = 100    # ← Ton x gauche
+LIGNE_X2 = 1180   # ← Ton x droit
 ```
 
----
-
-## ▶️ Utilisation
+### Étape 2 : Lancer l'analyse
 
 ```bash
 python main.py
 ```
 
-- La vidéo s'affiche avec les détections en temps réel.
-- Appuie sur **`q`** pour arrêter.
-- À la fin, un résumé s'affiche dans le terminal.
+Appuie sur **`q`** pour arrêter.
 
 ---
 
@@ -79,7 +82,7 @@ Timestamp,Type_Vehicule,Direction,ID_Tracking
 
 ---
 
-## ⚙️ Paramètres ajustables (dans main.py)
+## ⚙️ Paramètres ajustables
 
 | Variable                | Description                          | Défaut   |
 |-------------------------|--------------------------------------|----------|
@@ -87,4 +90,19 @@ Timestamp,Type_Vehicule,Direction,ID_Tracking
 | `CONFIDENCE_THRESHOLD`  | Seuil de confiance YOLO (0.0-1.0)   | `0.35`   |
 | `LIGNE_Y`               | Position Y de la ligne de comptage   | `400`    |
 | `LIGNE_X1` / `LIGNE_X2` | Début/fin X de la ligne              | `100` / `1180` |
-| `TOLERANCE`             | Marge de détection autour de la ligne | `10` px  |
+
+> En mode GUI, tous ces paramètres sont ajustables visuellement.
+
+---
+
+## 📁 Architecture
+
+```
+cartracker/
+├── gui.py                  ← Interface graphique (CustomTkinter)
+├── counter.py              ← Moteur de comptage (classe VehicleCounter)
+├── main.py                 ← Mode CLI
+├── trouver_coordonnees.py  ← Outil de calibration CLI
+├── requirements.txt        ← Dépendances Python
+└── README.md               ← Ce fichier
+```
