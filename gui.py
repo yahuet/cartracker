@@ -322,29 +322,30 @@ class App(ctk.CTk):
         sep_stats = ctk.CTkFrame(self.frame_stats, height=1, fg_color="gray30")
         sep_stats.pack(fill="x", padx=10, pady=5)
 
-        self.label_voiture = ctk.CTkLabel(
-            self.frame_stats, text="🚗 Voiture : 0",
-            font=ctk.CTkFont(size=12)
-        )
-        self.label_voiture.pack(anchor="w", padx=15, pady=1)
+        # Grille pour aligner les types de véhicules
+        frame_types = ctk.CTkFrame(self.frame_stats, fg_color="transparent")
+        frame_types.pack(fill="x", padx=15, pady=(0, 10))
 
-        self.label_camion = ctk.CTkLabel(
-            self.frame_stats, text="🚛 Camion  : 0",
-            font=ctk.CTkFont(size=12)
-        )
-        self.label_camion.pack(anchor="w", padx=15, pady=1)
+        types_vehicules = [
+            ("🚗", "Voiture", "label_voiture"),
+            ("🚛", "Camion", "label_camion"),
+            ("🚌", "Bus", "label_bus"),
+            ("🏍️", "Moto", "label_moto"),
+        ]
 
-        self.label_bus = ctk.CTkLabel(
-            self.frame_stats, text="🚌 Bus     : 0",
-            font=ctk.CTkFont(size=12)
-        )
-        self.label_bus.pack(anchor="w", padx=15, pady=1)
-
-        self.label_moto = ctk.CTkLabel(
-            self.frame_stats, text="🏍️ Moto    : 0",
-            font=ctk.CTkFont(size=12)
-        )
-        self.label_moto.pack(anchor="w", padx=15, pady=(1, 10))
+        for i, (icone, nom, attr) in enumerate(types_vehicules):
+            ctk.CTkLabel(
+                frame_types, text=icone, font=ctk.CTkFont(size=12), width=25
+            ).grid(row=i, column=0, sticky="w", pady=1)
+            ctk.CTkLabel(
+                frame_types, text=nom, font=ctk.CTkFont(size=12), width=60,
+                anchor="w"
+            ).grid(row=i, column=1, sticky="w", padx=(2, 0), pady=1)
+            lbl_count = ctk.CTkLabel(
+                frame_types, text=": 0", font=ctk.CTkFont(size=12), anchor="w"
+            )
+            lbl_count.grid(row=i, column=2, sticky="w", padx=(4, 0), pady=1)
+            setattr(self, attr, lbl_count)
 
         sep = ctk.CTkFrame(self.frame_controles, height=2, fg_color="gray30")
         sep.pack(fill="x", padx=5, pady=10)
@@ -724,16 +725,16 @@ class App(ctk.CTk):
 
         par_type = stats["par_type"]
         self.label_voiture.configure(
-            text=f"🚗 Voiture : {par_type.get('voiture', 0)}"
+            text=f": {par_type.get('voiture', 0)}"
         )
         self.label_camion.configure(
-            text=f"🚛 Camion  : {par_type.get('camion', 0)}"
+            text=f": {par_type.get('camion', 0)}"
         )
         self.label_bus.configure(
-            text=f"🚌 Bus     : {par_type.get('bus', 0)}"
+            text=f": {par_type.get('bus', 0)}"
         )
         self.label_moto.configure(
-            text=f"🏍️ Moto    : {par_type.get('moto', 0)}"
+            text=f": {par_type.get('moto', 0)}"
         )
 
         # Progression
