@@ -522,26 +522,34 @@ class App(ctk.CTk):
                 "progress_hooks": [hook_progression],
             }
 
-            # Essayer d'utiliser les cookies du navigateur pour éviter
-            # l'erreur "Sign in to confirm you're not a bot"
-            # ⚠️ Chrome doit être FERMÉ pour que yt-dlp puisse lire ses cookies
+            # Stratégies de téléchargement (par ordre de priorité)
+            strategies = [
+                # 1. Client web_creator — contourne souvent la détection de bot
+                {"extractor_args": {"youtube": {"player_client": ["web_creator"]}}},
+                # 2. Client Android — autre contournement possible
+                {"extractor_args": {"youtube": {"player_client": ["android"]}}},
+                # 3. Cookies navigateur (Edge, puis Firefox)
+                {"cookiesfrombrowser": ("edge",)},
+                {"cookiesfrombrowser": ("firefox",)},
+                # 4. Sans rien (dernière chance)
+                {},
+            ]
+
             titre = None
-            for navigateur in ["chrome", "edge", "firefox"]:
+            derniere_erreur = ""
+            for strategie in strategies:
                 try:
-                    ydl_opts["cookiesfrombrowser"] = (navigateur,)
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    opts = {**ydl_opts, **strategie}
+                    with yt_dlp.YoutubeDL(opts) as ydl:
                         info = ydl.extract_info(url, download=True)
                         titre = info.get("title", "Vidéo YouTube")
-                    break  # Succès, on sort de la boucle
-                except Exception:
-                    continue  # Essayer le navigateur suivant
+                    break  # Succès
+                except Exception as ex:
+                    derniere_erreur = str(ex)
+                    continue
 
             if titre is None:
-                # Aucun navigateur n'a fonctionné, essayer sans cookies
-                ydl_opts.pop("cookiesfrombrowser", None)
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    titre = info.get("title", "Vidéo YouTube")
+                raise RuntimeError(derniere_erreur)
 
             # Revenir sur le thread principal pour mettre à jour le GUI
             self.after(0, lambda: self._youtube_termine(output_path, titre))
