@@ -6,7 +6,7 @@
  de trafic avec YOLOv8.
 
  Fonctionnalités :
-   - Sélection de vidéo via dialogue fichier
+   - Sélection de vidéo via dialogue fichier OU lien YouTube
    - Calibration visuelle de la ligne de comptage (clic)
    - Paramètres ajustables (confiance, types de véhicules)
    - Vidéo en temps réel avec détections
@@ -20,6 +20,7 @@
 """
 
 import os
+import re
 import threading
 import subprocess
 from tkinter import filedialog
@@ -165,7 +166,7 @@ class App(ctk.CTk):
     # ─────────────────────────────────────────────────────────────
 
     def _section_fichier(self):
-        """Section pour la sélection du fichier vidéo."""
+        """Section pour la sélection du fichier vidéo (local ou YouTube)."""
 
         label = ctk.CTkLabel(
             self.frame_controles, text="📂 Fichier vidéo",
@@ -182,10 +183,30 @@ class App(ctk.CTk):
         self.label_chemin.pack(anchor="w", padx=10, pady=2)
 
         btn_parcourir = ctk.CTkButton(
-            self.frame_controles, text="Parcourir...",
+            self.frame_controles, text="📁 Parcourir...",
             command=self._ouvrir_video, height=32
         )
         btn_parcourir.pack(fill="x", padx=10, pady=5)
+
+        # ── Lien YouTube ──
+        ctk.CTkLabel(
+            self.frame_controles, text="ou coller un lien YouTube :",
+            font=ctk.CTkFont(size=11), text_color="gray70",
+        ).pack(anchor="w", padx=10, pady=(5, 2))
+
+        self.entry_url = ctk.CTkEntry(
+            self.frame_controles,
+            placeholder_text="https://www.youtube.com/watch?v=...",
+            height=32,
+        )
+        self.entry_url.pack(fill="x", padx=10, pady=2)
+
+        self.btn_telecharger = ctk.CTkButton(
+            self.frame_controles, text="⬇️  Télécharger",
+            command=self._telecharger_youtube, height=32,
+            fg_color="#6f42c1", hover_color="#5a32a3",
+        )
+        self.btn_telecharger.pack(fill="x", padx=10, pady=5)
 
         # Séparateur
         sep = ctk.CTkFrame(self.frame_controles, height=2, fg_color="gray30")
@@ -401,6 +422,87 @@ class App(ctk.CTk):
         if not chemin:
             return
 
+        self._charger_video(chemin)
+
+    def _telecharger_youtube(self):
+        """Télécharge une vidéo YouTube via yt-dlp dans un thread."""
+        url = self.entry_url.get().strip()
+        if not url:
+            self.label_statut.configure(
+                text="⚠️ Collez un lien YouTube d'abord !",
+                text_color="#ff6b6b",
+            )
+            return
+
+        # Validation basique de l'URL
+        pattern = r"(youtube\.com|youtu\.be)"
+        if not re.search(pattern, url):
+            self.label_statut.configure(
+                text="⚠️ Ce n'est pas un lien YouTube valide",
+                text_color="#ff6b6b",
+            )
+            return
+
+        # Désactiver le bouton pendant le téléchargement
+        self.btn_telecharger.configure(state="disabled", text="⏳ Téléchargement...")
+        self.label_statut.configure(
+            text="⬇️ Téléchargement en cours...", text_color="#00bfff"
+        )
+        self.label_chemin.configure(text="Téléchargement...", text_color="#ffcc00")
+
+        # Lancer le téléchargement dans un thread
+        thread = threading.Thread(
+            target=self._thread_telecharger, args=(url,), daemon=True
+        )
+        thread.start()
+
+    def _thread_telecharger(self, url):
+        """Thread de téléchargement YouTube (ne bloque pas le GUI)."""
+        try:
+            import yt_dlp
+
+            output_path = os.path.join(os.path.dirname(__file__), "youtube_video.mp4")
+
+            ydl_opts = {
+                "format": "best[ext=mp4][height<=720]/best[ext=mp4]/best",
+                "outtmpl": output_path,
+                "quiet": True,
+                "no_warnings": True,
+                "overwrites": True,
+            }
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                titre = info.get("title", "Vidéo YouTube")
+
+            # Revenir sur le thread principal pour mettre à jour le GUI
+            self.after(0, lambda: self._youtube_termine(output_path, titre))
+
+        except ImportError:
+            self.after(0, lambda: self._youtube_erreur(
+                "yt-dlp non installé. Lancez : pip install yt-dlp"
+            ))
+        except Exception as e:
+            self.after(0, lambda: self._youtube_erreur(str(e)))
+
+    def _youtube_termine(self, chemin, titre):
+        """Appelé quand le téléchargement YouTube est terminé."""
+        self.btn_telecharger.configure(state="normal", text="⬇️  Télécharger")
+        self.label_statut.configure(
+            text=f"✅ Téléchargé : {titre[:40]}", text_color="#00ff88"
+        )
+        self._charger_video(chemin)
+
+    def _youtube_erreur(self, message):
+        """Appelé en cas d'erreur de téléchargement YouTube."""
+        self.btn_telecharger.configure(state="normal", text="⬇️  Télécharger")
+        self.label_statut.configure(
+            text=f"⚠️ {message[:60]}", text_color="#ff6b6b"
+        )
+        self.label_chemin.configure(text="Erreur de téléchargement", text_color="#ff6b6b")
+
+    def _charger_video(self, chemin):
+        """Charge une vidéo (locale ou téléchargée) et affiche la première frame."""
         self.video_path = chemin
         nom_fichier = os.path.basename(chemin)
         self.label_chemin.configure(text=nom_fichier, text_color="white")
