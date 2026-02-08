@@ -6,7 +6,7 @@
  de trafic avec YOLOv8.
 
  Fonctionnalités :
-   - Sélection de vidéo via dialogue fichier OU lien YouTube
+   - Sélection de vidéo via dialogue fichier
    - Calibration visuelle de la ligne de comptage (clic)
    - Paramètres ajustables (confiance, types de véhicules)
    - Vidéo en temps réel avec détections
@@ -20,7 +20,7 @@
 """
 
 import os
-import re
+
 import threading
 import subprocess
 from tkinter import filedialog
@@ -173,7 +173,7 @@ class App(ctk.CTk):
     # ─────────────────────────────────────────────────────────────
 
     def _section_fichier(self):
-        """Section pour la sélection du fichier vidéo (local ou YouTube)."""
+        """Section pour la sélection du fichier vidéo."""
 
         label = ctk.CTkLabel(
             self.frame_controles, text="📂 Fichier vidéo",
@@ -194,43 +194,6 @@ class App(ctk.CTk):
             command=self._ouvrir_video, height=32
         )
         btn_parcourir.pack(fill="x", padx=10, pady=5)
-
-        # ── Lien YouTube ──
-        ctk.CTkLabel(
-            self.frame_controles, text="ou coller un lien YouTube :",
-            font=ctk.CTkFont(size=11), text_color="gray70",
-        ).pack(anchor="w", padx=10, pady=(5, 2))
-
-        self.entry_url = ctk.CTkEntry(
-            self.frame_controles,
-            placeholder_text="https://www.youtube.com/watch?v=...",
-            height=32,
-        )
-        self.entry_url.pack(fill="x", padx=10, pady=2)
-
-        self.btn_telecharger = ctk.CTkButton(
-            self.frame_controles, text="⬇️  Télécharger",
-            command=self._telecharger_youtube, height=32,
-            fg_color="#6f42c1", hover_color="#5a32a3",
-        )
-        self.btn_telecharger.pack(fill="x", padx=10, pady=5)
-
-        # ── Connexion YouTube ──
-        cookies_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "cookies.txt"
-        )
-        btn_connect_text = (
-            "✅ YouTube connecté" if os.path.exists(cookies_path)
-            else "🔑 Connecter YouTube"
-        )
-        self.btn_connecter_yt = ctk.CTkButton(
-            self.frame_controles, text=btn_connect_text,
-            command=self._connecter_youtube, height=28,
-            fg_color="#2d6a4f" if os.path.exists(cookies_path) else "#555",
-            hover_color="#1b4332" if os.path.exists(cookies_path) else "#666",
-            font=ctk.CTkFont(size=11),
-        )
-        self.btn_connecter_yt.pack(fill="x", padx=10, pady=(0, 5))
 
         # Séparateur
         sep = ctk.CTkFrame(self.frame_controles, height=2, fg_color="gray30")
@@ -448,240 +411,7 @@ class App(ctk.CTk):
 
         self._charger_video(chemin)
 
-    def _telecharger_youtube(self):
-        """Télécharge une vidéo YouTube via yt-dlp dans un thread."""
-        url = self.entry_url.get().strip()
-        if not url:
-            self.label_statut.configure(
-                text="⚠️ Collez un lien YouTube d'abord !",
-                text_color="#ff6b6b",
-            )
-            return
 
-        # Validation basique de l'URL
-        pattern = r"(youtube\.com|youtu\.be)"
-        if not re.search(pattern, url):
-            self.label_statut.configure(
-                text="⚠️ Ce n'est pas un lien YouTube valide",
-                text_color="#ff6b6b",
-            )
-            return
-
-        # Désactiver le bouton pendant le téléchargement
-        self.btn_telecharger.configure(state="disabled", text="⏳ Téléchargement...")
-        self.label_statut.configure(
-            text="⬇️ Téléchargement en cours...", text_color="#00bfff"
-        )
-        self.label_chemin.configure(text="Téléchargement...", text_color="#ffcc00")
-        self.progress_bar.set(0)
-
-        # Lancer le téléchargement dans un thread
-        thread = threading.Thread(
-            target=self._thread_telecharger, args=(url,), daemon=True
-        )
-        thread.start()
-
-    def _maj_progression_download(self, pourcentage, texte_statut):
-        """Met à jour la barre de progression et le statut (thread-safe via after)."""
-        self.progress_bar.set(pourcentage / 100.0)
-        self.label_progression.configure(text=texte_statut)
-        self.label_statut.configure(
-            text=texte_statut, text_color="#00bfff"
-        )
-
-    def _thread_telecharger(self, url):
-        """Thread de téléchargement YouTube (ne bloque pas le GUI)."""
-        try:
-            import yt_dlp
-
-            output_dir = os.path.dirname(os.path.abspath(__file__))
-            output_template = os.path.join(output_dir, "youtube_video.%(ext)s")
-            output_path = os.path.join(output_dir, "youtube_video.mp4")
-
-            # Supprimer l'ancien fichier s'il existe
-            if os.path.exists(output_path):
-                os.remove(output_path)
-
-            def hook_progression(d):
-                """Callback appelé par yt-dlp pour signaler la progression."""
-                if d["status"] == "downloading":
-                    total = d.get("total_bytes") or d.get("total_bytes_estimate", 0)
-                    downloaded = d.get("downloaded_bytes", 0)
-                    speed = d.get("speed", 0) or 0
-
-                    pct = (downloaded / total) * 100 if total > 0 else 0
-
-                    if speed > 1_000_000:
-                        vitesse_txt = f"{speed / 1_000_000:.1f} Mo/s"
-                    elif speed > 1_000:
-                        vitesse_txt = f"{speed / 1_000:.0f} Ko/s"
-                    else:
-                        vitesse_txt = "..."
-
-                    taille_txt = f"{downloaded / 1_000_000:.1f}"
-                    total_txt = f"{total / 1_000_000:.1f}" if total else "?"
-
-                    statut = f"⬇️ {pct:.0f}% — {taille_txt}/{total_txt} Mo ({vitesse_txt})"
-                    self.after(0, lambda p=pct, s=statut: self._maj_progression_download(p, s))
-
-                elif d["status"] == "finished":
-                    self.after(0, lambda: self._maj_progression_download(
-                        100, "✅ Téléchargement terminé"
-                    ))
-
-            ydl_opts = {
-                "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
-                "outtmpl": output_template,
-                "merge_output_format": "mp4",
-                "quiet": True,
-                "no_warnings": True,
-                "noprogress": True,
-                "progress_hooks": [hook_progression],
-            }
-
-            # Utiliser cookies.txt s'il existe (exporté via Connecter YouTube)
-            cookies_path = os.path.join(output_dir, "cookies.txt")
-            if os.path.exists(cookies_path):
-                ydl_opts["cookiefile"] = cookies_path
-
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                titre = info.get("title", "Vidéo YouTube")
-
-            # Revenir sur le thread principal pour mettre à jour le GUI
-            self.after(0, lambda: self._youtube_termine(output_path, titre))
-
-        except ImportError:
-            self.after(0, lambda: self._youtube_erreur(
-                "yt-dlp non installé. Lancez : pip install yt-dlp"
-            ))
-        except Exception as e:
-            msg = str(e)
-            self.after(0, lambda: self._youtube_erreur(msg))
-
-    # ── Connexion YouTube via Selenium ──────────────────────────────
-
-    def _connecter_youtube(self):
-        """Ouvre Chrome pour se connecter à YouTube et exporter les cookies."""
-        self.btn_connecter_yt.configure(
-            state="disabled", text="🔄 Ouverture de Chrome..."
-        )
-        threading.Thread(
-            target=self._thread_connecter_youtube, daemon=True
-        ).start()
-
-    def _thread_connecter_youtube(self):
-        """Thread : ouvre Chrome, attend la connexion, exporte les cookies."""
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.chrome.service import Service
-            from selenium.webdriver.chrome.options import Options
-            from webdriver_manager.chrome import ChromeDriverManager
-
-            self.after(0, lambda: self.label_statut.configure(
-                text="🔄 Démarrage de Chrome...", text_color="#ffaa00"
-            ))
-
-            options = Options()
-            options.add_argument("--start-maximized")
-            options.add_argument("--disable-blink-features=AutomationControlled")
-            options.add_experimental_option("excludeSwitches", ["enable-automation"])
-
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=options)
-
-            driver.get("https://accounts.google.com/ServiceLogin?continue=https://www.youtube.com")
-
-            self.after(0, lambda: self.label_statut.configure(
-                text="🔑 Connectez-vous à votre compte Google dans Chrome...",
-                text_color="#ffaa00"
-            ))
-
-            # Attendre que l'utilisateur se connecte (on détecte l'arrivée sur youtube.com)
-            import time
-            cookies = []
-            while True:
-                try:
-                    current_url = driver.current_url
-                    # L'utilisateur est arrivé sur YouTube = connexion réussie
-                    if "youtube.com" in current_url and "accounts.google" not in current_url:
-                        self.after(0, lambda: self.label_statut.configure(
-                            text="🔄 Export des cookies en cours...",
-                            text_color="#ffaa00"
-                        ))
-                        time.sleep(2)  # Laisser le temps aux cookies de se charger
-                        cookies = driver.get_cookies()
-                        break
-                    time.sleep(1)
-                except Exception:
-                    break  # Fenêtre fermée
-
-            # Fermer Chrome proprement
-            try:
-                driver.quit()
-            except Exception:
-                pass
-
-            if not cookies:
-                raise RuntimeError("Connexion annulée ou aucun cookie récupéré")
-
-            # Exporter les cookies au format Netscape
-            output_dir = os.path.dirname(os.path.abspath(__file__))
-            cookies_path = os.path.join(output_dir, "cookies.txt")
-
-            with open(cookies_path, "w", encoding="utf-8") as f:
-                f.write("# Netscape HTTP Cookie File\n")
-                for c in cookies:
-                    domain = c.get("domain", "")
-                    flag = "TRUE" if domain.startswith(".") else "FALSE"
-                    path = c.get("path", "/")
-                    secure = "TRUE" if c.get("secure", False) else "FALSE"
-                    expiry = str(int(c.get("expiry", 0)))
-                    name = c.get("name", "")
-                    value = c.get("value", "")
-                    f.write(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}\n")
-
-            self.after(0, self._connexion_youtube_ok)
-
-        except Exception as e:
-            msg = str(e)
-            self.after(0, lambda: self._connexion_youtube_erreur(msg))
-
-    def _connexion_youtube_ok(self):
-        """Appelé après connexion YouTube réussie."""
-        self.btn_connecter_yt.configure(
-            state="normal", text="✅ YouTube connecté",
-            fg_color="#2d6a4f", hover_color="#1b4332"
-        )
-        self.label_statut.configure(
-            text="✅ Cookies YouTube sauvegardés !", text_color="#00ff88"
-        )
-
-    def _connexion_youtube_erreur(self, message):
-        """Appelé en cas d'erreur de connexion YouTube."""
-        self.btn_connecter_yt.configure(
-            state="normal", text="🔑 Connecter YouTube",
-            fg_color="#555", hover_color="#666"
-        )
-        self.label_statut.configure(
-            text=f"❌ Erreur connexion : {message[:60]}", text_color="#ff4444"
-        )
-
-    def _youtube_termine(self, chemin, titre):
-        """Appelé quand le téléchargement YouTube est terminé."""
-        self.btn_telecharger.configure(state="normal", text="⬇️  Télécharger")
-        self.label_statut.configure(
-            text=f"✅ Téléchargé : {titre[:40]}", text_color="#00ff88"
-        )
-        self._charger_video(chemin)
-
-    def _youtube_erreur(self, message):
-        """Appelé en cas d'erreur de téléchargement YouTube."""
-        self.btn_telecharger.configure(state="normal", text="⬇️  Télécharger")
-        self.label_statut.configure(
-            text=f"⚠️ {message[:60]}", text_color="#ff6b6b"
-        )
-        self.label_chemin.configure(text="Erreur de téléchargement", text_color="#ff6b6b")
 
     def _charger_video(self, chemin):
         """Charge une vidéo (locale ou téléchargée) et affiche la première frame."""
