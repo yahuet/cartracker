@@ -593,21 +593,39 @@ class App(ctk.CTk):
             driver.get("https://accounts.google.com/ServiceLogin?continue=https://www.youtube.com")
 
             self.after(0, lambda: self.label_statut.configure(
-                text="🔑 Connectez-vous à YouTube puis fermez la fenêtre Chrome",
+                text="🔑 Connectez-vous à votre compte Google dans Chrome...",
                 text_color="#ffaa00"
             ))
 
-            # Attendre que l'utilisateur ferme la fenêtre Chrome
+            # Attendre que l'utilisateur se connecte (on détecte l'arrivée sur youtube.com)
             import time
+            cookies = []
             while True:
                 try:
-                    _ = driver.window_handles
+                    current_url = driver.current_url
+                    # L'utilisateur est arrivé sur YouTube = connexion réussie
+                    if "youtube.com" in current_url and "accounts.google" not in current_url:
+                        self.after(0, lambda: self.label_statut.configure(
+                            text="🔄 Export des cookies en cours...",
+                            text_color="#ffaa00"
+                        ))
+                        time.sleep(2)  # Laisser le temps aux cookies de se charger
+                        cookies = driver.get_cookies()
+                        break
                     time.sleep(1)
                 except Exception:
                     break  # Fenêtre fermée
 
+            # Fermer Chrome proprement
+            try:
+                driver.quit()
+            except Exception:
+                pass
+
+            if not cookies:
+                raise RuntimeError("Connexion annulée ou aucun cookie récupéré")
+
             # Exporter les cookies au format Netscape
-            cookies = driver.get_cookies()
             output_dir = os.path.dirname(os.path.abspath(__file__))
             cookies_path = os.path.join(output_dir, "cookies.txt")
 
@@ -622,11 +640,6 @@ class App(ctk.CTk):
                     name = c.get("name", "")
                     value = c.get("value", "")
                     f.write(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}\n")
-
-            try:
-                driver.quit()
-            except Exception:
-                pass
 
             self.after(0, self._connexion_youtube_ok)
 
