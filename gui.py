@@ -524,9 +524,9 @@ class App(ctk.CTk):
 
             # Essayer d'utiliser les cookies du navigateur pour éviter
             # l'erreur "Sign in to confirm you're not a bot"
-            # Edge en premier sur Windows (Chrome verrouille ses cookies quand il est ouvert)
+            # ⚠️ Chrome doit être FERMÉ pour que yt-dlp puisse lire ses cookies
             titre = None
-            for navigateur in ["edge", "firefox", "chrome"]:
+            for navigateur in ["chrome", "edge", "firefox"]:
                 try:
                     ydl_opts["cookiesfrombrowser"] = (navigateur,)
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
