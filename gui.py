@@ -513,17 +513,20 @@ class App(ctk.CTk):
                     ))
 
             ydl_opts = {
-                "format": "best[ext=mp4][height<=720]/best[ext=mp4]/best",
+                "format": "bestvideo[height<=720]+bestaudio/best[height<=720]/best",
                 "outtmpl": output_template,
                 "merge_output_format": "mp4",
                 "quiet": True,
                 "no_warnings": True,
+                "noprogress": True,
                 "progress_hooks": [hook_progression],
             }
 
             # Essayer d'utiliser les cookies du navigateur pour éviter
             # l'erreur "Sign in to confirm you're not a bot"
-            for navigateur in ["chrome", "firefox", "edge"]:
+            # Edge en premier sur Windows (Chrome verrouille ses cookies quand il est ouvert)
+            titre = None
+            for navigateur in ["edge", "firefox", "chrome"]:
                 try:
                     ydl_opts["cookiesfrombrowser"] = (navigateur,)
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -532,9 +535,10 @@ class App(ctk.CTk):
                     break  # Succès, on sort de la boucle
                 except Exception:
                     continue  # Essayer le navigateur suivant
-            else:
+
+            if titre is None:
                 # Aucun navigateur n'a fonctionné, essayer sans cookies
-                del ydl_opts["cookiesfrombrowser"]
+                ydl_opts.pop("cookiesfrombrowser", None)
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                     info = ydl.extract_info(url, download=True)
                     titre = info.get("title", "Vidéo YouTube")
