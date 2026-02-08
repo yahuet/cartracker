@@ -131,8 +131,15 @@ class App(ctk.CTk):
         self.canvas_video.bind("<Button-1>", self._on_clic_canvas)
 
         # Barre de progression en bas
-        self.progress_bar = ctk.CTkProgressBar(frame_video, height=6)
-        self.progress_bar.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+        self.label_progression = ctk.CTkLabel(
+            frame_video, text="",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            text_color="#00bfff", height=20,
+        )
+        self.label_progression.grid(row=1, column=0, padx=10, pady=(5, 0), sticky="ew")
+
+        self.progress_bar = ctk.CTkProgressBar(frame_video, height=12)
+        self.progress_bar.grid(row=2, column=0, padx=10, pady=(2, 10), sticky="ew")
         self.progress_bar.set(0)
 
     def _construire_panneau_controles(self):
@@ -460,6 +467,7 @@ class App(ctk.CTk):
     def _maj_progression_download(self, pourcentage, texte_statut):
         """Met à jour la barre de progression et le statut (thread-safe via after)."""
         self.progress_bar.set(pourcentage / 100.0)
+        self.label_progression.configure(text=texte_statut)
         self.label_statut.configure(
             text=texte_statut, text_color="#00bfff"
         )
@@ -469,22 +477,23 @@ class App(ctk.CTk):
         try:
             import yt_dlp
 
-            output_path = os.path.join(os.path.dirname(__file__), "youtube_video.mp4")
+            output_dir = os.path.dirname(os.path.abspath(__file__))
+            output_template = os.path.join(output_dir, "youtube_video.%(ext)s")
+            output_path = os.path.join(output_dir, "youtube_video.mp4")
+
+            # Supprimer l'ancien fichier s'il existe
+            if os.path.exists(output_path):
+                os.remove(output_path)
 
             def hook_progression(d):
                 """Callback appelé par yt-dlp pour signaler la progression."""
                 if d["status"] == "downloading":
-                    # Extraire le pourcentage
                     total = d.get("total_bytes") or d.get("total_bytes_estimate", 0)
                     downloaded = d.get("downloaded_bytes", 0)
                     speed = d.get("speed", 0) or 0
 
-                    if total > 0:
-                        pct = (downloaded / total) * 100
-                    else:
-                        pct = 0
+                    pct = (downloaded / total) * 100 if total > 0 else 0
 
-                    # Formater la vitesse
                     if speed > 1_000_000:
                         vitesse_txt = f"{speed / 1_000_000:.1f} Mo/s"
                     elif speed > 1_000:
@@ -500,15 +509,15 @@ class App(ctk.CTk):
 
                 elif d["status"] == "finished":
                     self.after(0, lambda: self._maj_progression_download(
-                        100, "⏳ Conversion en cours..."
+                        100, "✅ Téléchargement terminé"
                     ))
 
             ydl_opts = {
                 "format": "best[ext=mp4][height<=720]/best[ext=mp4]/best",
-                "outtmpl": output_path,
+                "outtmpl": output_template,
+                "merge_output_format": "mp4",
                 "quiet": True,
                 "no_warnings": True,
-                "overwrites": True,
                 "progress_hooks": [hook_progression],
             }
 
