@@ -449,12 +449,20 @@ class App(ctk.CTk):
             text="⬇️ Téléchargement en cours...", text_color="#00bfff"
         )
         self.label_chemin.configure(text="Téléchargement...", text_color="#ffcc00")
+        self.progress_bar.set(0)
 
         # Lancer le téléchargement dans un thread
         thread = threading.Thread(
             target=self._thread_telecharger, args=(url,), daemon=True
         )
         thread.start()
+
+    def _maj_progression_download(self, pourcentage, texte_statut):
+        """Met à jour la barre de progression et le statut (thread-safe via after)."""
+        self.progress_bar.set(pourcentage / 100.0)
+        self.label_statut.configure(
+            text=texte_statut, text_color="#00bfff"
+        )
 
     def _thread_telecharger(self, url):
         """Thread de téléchargement YouTube (ne bloque pas le GUI)."""
@@ -463,12 +471,45 @@ class App(ctk.CTk):
 
             output_path = os.path.join(os.path.dirname(__file__), "youtube_video.mp4")
 
+            def hook_progression(d):
+                """Callback appelé par yt-dlp pour signaler la progression."""
+                if d["status"] == "downloading":
+                    # Extraire le pourcentage
+                    total = d.get("total_bytes") or d.get("total_bytes_estimate", 0)
+                    downloaded = d.get("downloaded_bytes", 0)
+                    speed = d.get("speed", 0) or 0
+
+                    if total > 0:
+                        pct = (downloaded / total) * 100
+                    else:
+                        pct = 0
+
+                    # Formater la vitesse
+                    if speed > 1_000_000:
+                        vitesse_txt = f"{speed / 1_000_000:.1f} Mo/s"
+                    elif speed > 1_000:
+                        vitesse_txt = f"{speed / 1_000:.0f} Ko/s"
+                    else:
+                        vitesse_txt = "..."
+
+                    taille_txt = f"{downloaded / 1_000_000:.1f}"
+                    total_txt = f"{total / 1_000_000:.1f}" if total else "?"
+
+                    statut = f"⬇️ {pct:.0f}% — {taille_txt}/{total_txt} Mo ({vitesse_txt})"
+                    self.after(0, lambda p=pct, s=statut: self._maj_progression_download(p, s))
+
+                elif d["status"] == "finished":
+                    self.after(0, lambda: self._maj_progression_download(
+                        100, "⏳ Conversion en cours..."
+                    ))
+
             ydl_opts = {
                 "format": "best[ext=mp4][height<=720]/best[ext=mp4]/best",
                 "outtmpl": output_path,
                 "quiet": True,
                 "no_warnings": True,
                 "overwrites": True,
+                "progress_hooks": [hook_progression],
             }
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
