@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+venv/
+.venv/
+
+# YOLO model weights (downloaded automatically)
+*.pt
+
+# Output files
+output_tracked.mp4
+traffic_data.csv
+
+# IDE
+.vscode/
+.idea/
