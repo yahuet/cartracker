@@ -521,9 +521,23 @@ class App(ctk.CTk):
                 "progress_hooks": [hook_progression],
             }
 
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                titre = info.get("title", "Vidéo YouTube")
+            # Essayer d'utiliser les cookies du navigateur pour éviter
+            # l'erreur "Sign in to confirm you're not a bot"
+            for navigateur in ["chrome", "firefox", "edge"]:
+                try:
+                    ydl_opts["cookiesfrombrowser"] = (navigateur,)
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        info = ydl.extract_info(url, download=True)
+                        titre = info.get("title", "Vidéo YouTube")
+                    break  # Succès, on sort de la boucle
+                except Exception:
+                    continue  # Essayer le navigateur suivant
+            else:
+                # Aucun navigateur n'a fonctionné, essayer sans cookies
+                del ydl_opts["cookiesfrombrowser"]
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(url, download=True)
+                    titre = info.get("title", "Vidéo YouTube")
 
             # Revenir sur le thread principal pour mettre à jour le GUI
             self.after(0, lambda: self._youtube_termine(output_path, titre))
