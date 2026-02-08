@@ -215,6 +215,23 @@ class App(ctk.CTk):
         )
         self.btn_telecharger.pack(fill="x", padx=10, pady=5)
 
+        # ── Connexion YouTube ──
+        cookies_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "cookies.txt"
+        )
+        btn_connect_text = (
+            "✅ YouTube connecté" if os.path.exists(cookies_path)
+            else "🔑 Connecter YouTube"
+        )
+        self.btn_connecter_yt = ctk.CTkButton(
+            self.frame_controles, text=btn_connect_text,
+            command=self._connecter_youtube, height=28,
+            fg_color="#2d6a4f" if os.path.exists(cookies_path) else "#555",
+            hover_color="#1b4332" if os.path.exists(cookies_path) else "#666",
+            font=ctk.CTkFont(size=11),
+        )
+        self.btn_connecter_yt.pack(fill="x", padx=10, pady=(0, 5))
+
         # Séparateur
         sep = ctk.CTkFrame(self.frame_controles, height=2, fg_color="gray30")
         sep.pack(fill="x", padx=5, pady=10)
@@ -522,34 +539,14 @@ class App(ctk.CTk):
                 "progress_hooks": [hook_progression],
             }
 
-            # Stratégies de téléchargement (par ordre de priorité)
-            strategies = [
-                # 1. Client web_creator — contourne souvent la détection de bot
-                {"extractor_args": {"youtube": {"player_client": ["web_creator"]}}},
-                # 2. Client Android — autre contournement possible
-                {"extractor_args": {"youtube": {"player_client": ["android"]}}},
-                # 3. Cookies navigateur (Edge, puis Firefox)
-                {"cookiesfrombrowser": ("edge",)},
-                {"cookiesfrombrowser": ("firefox",)},
-                # 4. Sans rien (dernière chance)
-                {},
-            ]
+            # Utiliser cookies.txt s'il existe (exporté via Connecter YouTube)
+            cookies_path = os.path.join(output_dir, "cookies.txt")
+            if os.path.exists(cookies_path):
+                ydl_opts["cookiefile"] = cookies_path
 
-            titre = None
-            derniere_erreur = ""
-            for strategie in strategies:
-                try:
-                    opts = {**ydl_opts, **strategie}
-                    with yt_dlp.YoutubeDL(opts) as ydl:
-                        info = ydl.extract_info(url, download=True)
-                        titre = info.get("title", "Vidéo YouTube")
-                    break  # Succès
-                except Exception as ex:
-                    derniere_erreur = str(ex)
-                    continue
-
-            if titre is None:
-                raise RuntimeError(derniere_erreur)
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                titre = info.get("title", "Vidéo YouTube")
 
             # Revenir sur le thread principal pour mettre à jour le GUI
             self.after(0, lambda: self._youtube_termine(output_path, titre))
@@ -561,6 +558,101 @@ class App(ctk.CTk):
         except Exception as e:
             msg = str(e)
             self.after(0, lambda: self._youtube_erreur(msg))
+
+    # ── Connexion YouTube via Selenium ──────────────────────────────
+
+    def _connecter_youtube(self):
+        """Ouvre Chrome pour se connecter à YouTube et exporter les cookies."""
+        self.btn_connecter_yt.configure(
+            state="disabled", text="🔄 Ouverture de Chrome..."
+        )
+        threading.Thread(
+            target=self._thread_connecter_youtube, daemon=True
+        ).start()
+
+    def _thread_connecter_youtube(self):
+        """Thread : ouvre Chrome, attend la connexion, exporte les cookies."""
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.service import Service
+            from selenium.webdriver.chrome.options import Options
+            from webdriver_manager.chrome import ChromeDriverManager
+
+            self.after(0, lambda: self.label_statut.configure(
+                text="🔄 Démarrage de Chrome...", text_color="#ffaa00"
+            ))
+
+            options = Options()
+            options.add_argument("--start-maximized")
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+
+            service = Service(ChromeDriverManager().install())
+            driver = webdriver.Chrome(service=service, options=options)
+
+            driver.get("https://accounts.google.com/ServiceLogin?continue=https://www.youtube.com")
+
+            self.after(0, lambda: self.label_statut.configure(
+                text="🔑 Connectez-vous à YouTube puis fermez la fenêtre Chrome",
+                text_color="#ffaa00"
+            ))
+
+            # Attendre que l'utilisateur ferme la fenêtre Chrome
+            import time
+            while True:
+                try:
+                    _ = driver.window_handles
+                    time.sleep(1)
+                except Exception:
+                    break  # Fenêtre fermée
+
+            # Exporter les cookies au format Netscape
+            cookies = driver.get_cookies()
+            output_dir = os.path.dirname(os.path.abspath(__file__))
+            cookies_path = os.path.join(output_dir, "cookies.txt")
+
+            with open(cookies_path, "w", encoding="utf-8") as f:
+                f.write("# Netscape HTTP Cookie File\n")
+                for c in cookies:
+                    domain = c.get("domain", "")
+                    flag = "TRUE" if domain.startswith(".") else "FALSE"
+                    path = c.get("path", "/")
+                    secure = "TRUE" if c.get("secure", False) else "FALSE"
+                    expiry = str(int(c.get("expiry", 0)))
+                    name = c.get("name", "")
+                    value = c.get("value", "")
+                    f.write(f"{domain}\t{flag}\t{path}\t{secure}\t{expiry}\t{name}\t{value}\n")
+
+            try:
+                driver.quit()
+            except Exception:
+                pass
+
+            self.after(0, self._connexion_youtube_ok)
+
+        except Exception as e:
+            msg = str(e)
+            self.after(0, lambda: self._connexion_youtube_erreur(msg))
+
+    def _connexion_youtube_ok(self):
+        """Appelé après connexion YouTube réussie."""
+        self.btn_connecter_yt.configure(
+            state="normal", text="✅ YouTube connecté",
+            fg_color="#2d6a4f", hover_color="#1b4332"
+        )
+        self.label_statut.configure(
+            text="✅ Cookies YouTube sauvegardés !", text_color="#00ff88"
+        )
+
+    def _connexion_youtube_erreur(self, message):
+        """Appelé en cas d'erreur de connexion YouTube."""
+        self.btn_connecter_yt.configure(
+            state="normal", text="🔑 Connecter YouTube",
+            fg_color="#555", hover_color="#666"
+        )
+        self.label_statut.configure(
+            text=f"❌ Erreur connexion : {message[:60]}", text_color="#ff4444"
+        )
 
     def _youtube_termine(self, chemin, titre):
         """Appelé quand le téléchargement YouTube est terminé."""

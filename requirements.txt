@@ -4,3 +4,5 @@ lapx>=0.5.2
 customtkinter>=5.2.0
 Pillow>=10.0.0
 yt-dlp>=2024.0.0
+selenium>=4.0.0
+webdriver-manager>=4.0.0
