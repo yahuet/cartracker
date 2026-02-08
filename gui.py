@@ -551,7 +551,8 @@ class App(ctk.CTk):
                 "yt-dlp non installé. Lancez : pip install yt-dlp"
             ))
         except Exception as e:
-            self.after(0, lambda: self._youtube_erreur(str(e)))
+            msg = str(e)
+            self.after(0, lambda: self._youtube_erreur(msg))
 
     def _youtube_termine(self, chemin, titre):
         """Appelé quand le téléchargement YouTube est terminé."""
